@@ -17,7 +17,9 @@
 package com.google.accompanist.permissions
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
+import androidx.compose.ui.platform.LocalInspectionMode
 
 /**
  * Creates a [PermissionState] that is remembered across compositions.
@@ -26,13 +28,40 @@ import androidx.compose.runtime.Stable
  * [documentation](https://developer.android.com/training/permissions/requesting#workflow_for_requesting_permissions).
  *
  * @param permission the permission to control and observe.
+ * @param onPermissionResult will be called with whether or not the user granted the permission
+ *  after [PermissionState.launchPermissionRequest] is called.
  */
 @ExperimentalPermissionsApi
 @Composable
-fun rememberPermissionState(
-    permission: String
+public fun rememberPermissionState(
+    permission: String,
+    onPermissionResult: (Boolean) -> Unit = {}
 ): PermissionState {
-    return rememberMutablePermissionState(permission)
+    return rememberPermissionState(permission, onPermissionResult, PermissionStatus.Granted)
+}
+
+/**
+ * Creates a [PermissionState] that is remembered across compositions.
+ *
+ * It's recommended that apps exercise the permissions workflow as described in the
+ * [documentation](https://developer.android.com/training/permissions/requesting#workflow_for_requesting_permissions).
+ *
+ * @param permission the permission to control and observe.
+ * @param onPermissionResult will be called with whether or not the user granted the permission
+ *  after [PermissionState.launchPermissionRequest] is called.
+ * @param previewPermissionStatus provides a [PermissionStatus] when running in a preview.
+ */
+@ExperimentalPermissionsApi
+@Composable
+public fun rememberPermissionState(
+    permission: String,
+    onPermissionResult: (Boolean) -> Unit = {},
+    previewPermissionStatus: PermissionStatus = PermissionStatus.Granted
+): PermissionState {
+    return when {
+        LocalInspectionMode.current -> PreviewPermissionState(permission, previewPermissionStatus)
+        else -> rememberMutablePermissionState(permission, onPermissionResult)
+    }
 }
 
 /**
@@ -45,27 +74,17 @@ fun rememberPermissionState(
  */
 @ExperimentalPermissionsApi
 @Stable
-interface PermissionState {
+public interface PermissionState {
 
     /**
      * The permission to control and observe.
      */
-    val permission: String
+    public val permission: String
 
     /**
-     * When `true`, the user has granted the [permission].
+     * [permission]'s status
      */
-    val hasPermission: Boolean
-
-    /**
-     * When `true`, the user should be presented with a rationale.
-     */
-    val shouldShowRationale: Boolean
-
-    /**
-     * When `true`, the [permission] request has been done previously.
-     */
-    val permissionRequested: Boolean
+    public val status: PermissionStatus
 
     /**
      * Request the [permission] to the user.
@@ -78,5 +97,14 @@ interface PermissionState {
      * again or has denied the permission multiple times.
      * This behavior varies depending on the Android level API.
      */
-    fun launchPermissionRequest(): Unit
+    public fun launchPermissionRequest(): Unit
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Immutable
+internal class PreviewPermissionState(
+    override val permission: String,
+    override val status: PermissionStatus
+) : PermissionState {
+    override fun launchPermissionRequest() {}
 }

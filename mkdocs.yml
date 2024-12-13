@@ -15,31 +15,12 @@ repo_url: 'https://github.com/google/accompanist'
 # Navigation
 nav:
   - 'Overview': index.md
-  - 'Insets':
-    - 'Guide': insets.md
-    - 'API': api/insets/
   - 'System UI Controller':
     - 'Guide': systemuicontroller.md
     - 'API': api/systemuicontroller/
-  - 'AppCompat Theme':
-    - 'Guide': appcompat-theme.md
-    - 'API': api/appcompat-theme/
-  - 'Pager layouts':
-    - 'Guide': pager.md
-    - 'API': api/pager/
-  - 'Swipe Refresh':
-    - 'Guide': swiperefresh.md
-    - 'API': api/swiperefresh/
-  - 'Placeholder':
-    - 'Guide': placeholder.md
-    - 'Foundation API': api/placeholder/
-    - 'Material API': api/placeholder-material/
   - 'Drawable Painter':
     - 'Guide': drawablepainter.md
     - 'API': api/drawablepainter/ 
-  - 'Flow layouts':
-    - 'Guide': flowlayout.md
-    - 'API': api/flowlayout/
   - 'Permissions':
     - 'Guide': permissions.md
     - 'API': api/permissions/
@@ -49,6 +30,9 @@ nav:
   - 'Navigation Material':
       - 'Guide': navigation-material.md
       - 'API': api/navigation-material/
+  - 'Adaptive':
+      - 'Guide': adaptive.md
+      - 'API': api/adaptive
   - 'Snapshots': using-snapshot-version.md
   - 'Contributing': contributing.md
   - 'Maintainers':
@@ -78,5 +62,6 @@ markdown_extensions:
       permalink: true
   - pymdownx.betterem
   - pymdownx.superfences
-  - pymdownx.tabbed
+  - pymdownx.tabbed:
+      alternate_style: true
   - pymdownx.details

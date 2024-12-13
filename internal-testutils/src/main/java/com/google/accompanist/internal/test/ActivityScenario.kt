@@ -19,7 +19,7 @@ package com.google.accompanist.internal.test
 import android.app.Activity
 import androidx.test.core.app.ActivityScenario
 
-fun <A : Activity, T : Any> ActivityScenario<A>.withActivity(
+public fun <A : Activity, T : Any> ActivityScenario<A>.withActivity(
     action: (A) -> T
 ): T {
     lateinit var result: T

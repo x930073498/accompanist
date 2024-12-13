@@ -26,8 +26,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.test.filters.FlakyTest
 import androidx.test.filters.SdkSuppress
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -71,10 +71,11 @@ class RequestPermissionTest {
         composeTestRule.onNodeWithText("ShowRationale").assertIsDisplayed()
         composeTestRule.onNodeWithText("Request").performClick()
         doNotAskAgainPermissionInDialog()
-        composeTestRule.onNodeWithText("Denied").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No permission").assertIsDisplayed()
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
+    @SdkSuppress(minSdkVersion = 29) // Flaky below
+    @FlakyTest
     @Test
     fun permissionTest_grantInTheBackground() {
         composeTestRule.onNodeWithText("No permission").assertIsDisplayed()
@@ -83,39 +84,41 @@ class RequestPermissionTest {
         composeTestRule.onNodeWithText("ShowRationale").assertIsDisplayed()
         composeTestRule.onNodeWithText("Request").performClick()
         doNotAskAgainPermissionInDialog()
-        composeTestRule.onNodeWithText("Denied").assertIsDisplayed()
+        composeTestRule.onNodeWithText("No permission").assertIsDisplayed()
 
         // This simulates the user going to the Settings screen and granting the permission
-        grantPermissionProgrammatically("android.permission.CAMERA")
+        grantPermissionProgrammatically(android.Manifest.permission.CAMERA)
         simulateAppComingFromTheBackground(composeTestRule)
         composeTestRule.activityRule.scenario.onActivity {
             it.setContent { ComposableUnderTest() }
         }
+
+        composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithText("Granted").assertIsDisplayed()
     }
 
     @Composable
     private fun ComposableUnderTest() {
+
         val state = rememberPermissionState(android.Manifest.permission.CAMERA)
-        when {
-            state.hasPermission -> {
+        when (state.status) {
+            PermissionStatus.Granted -> {
                 Text("Granted")
             }
-            state.shouldShowRationale || !state.permissionRequested -> {
+            is PermissionStatus.Denied -> {
                 Column {
-                    if (state.permissionRequested) {
-                        Text("ShowRationale")
+                    val textToShow = if (state.status.shouldShowRationale) {
+                        "ShowRationale"
                     } else {
-                        Text("No permission")
+                        "No permission"
                     }
+
+                    Text(textToShow)
                     Button(onClick = { state.launchPermissionRequest() }) {
                         Text("Request")
                     }
                 }
-            }
-            else -> {
-                Text("Denied")
             }
         }
     }

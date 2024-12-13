@@ -17,7 +17,10 @@
 package com.google.accompanist.permissions
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.util.fastMap
 
 /**
  * Creates a [MultiplePermissionsState] that is remembered across compositions.
@@ -26,13 +29,42 @@ import androidx.compose.runtime.Stable
  * [documentation](https://developer.android.com/training/permissions/requesting#workflow_for_requesting_permissions).
  *
  * @param permissions the permissions to control and observe.
+ * @param onPermissionsResult will be called with whether or not the user granted the permissions
+ *  after [MultiplePermissionsState.launchMultiplePermissionRequest] is called.
  */
 @ExperimentalPermissionsApi
 @Composable
-fun rememberMultiplePermissionsState(
-    permissions: List<String>
+public fun rememberMultiplePermissionsState(
+    permissions: List<String>,
+    onPermissionsResult: (Map<String, Boolean>) -> Unit = {}
 ): MultiplePermissionsState {
-    return rememberMutableMultiplePermissionsState(permissions)
+    return rememberMultiplePermissionsState(permissions, onPermissionsResult, emptyMap())
+}
+
+/**
+ * Creates a [MultiplePermissionsState] that is remembered across compositions.
+ *
+ * It's recommended that apps exercise the permissions workflow as described in the
+ * [documentation](https://developer.android.com/training/permissions/requesting#workflow_for_requesting_permissions).
+ *
+ * @param permissions the permissions to control and observe.
+ * @param onPermissionsResult will be called with whether or not the user granted the permissions
+ *  after [MultiplePermissionsState.launchMultiplePermissionRequest] is called.
+ * @param previewPermissionStatuses provides a [PermissionStatus] for a given permission when running
+ *  in a preview.
+ */
+@ExperimentalPermissionsApi
+@Composable
+public fun rememberMultiplePermissionsState(
+    permissions: List<String>,
+    onPermissionsResult: (Map<String, Boolean>) -> Unit = {},
+    previewPermissionStatuses: Map<String, PermissionStatus> = emptyMap()
+): MultiplePermissionsState {
+    return when {
+        LocalInspectionMode.current ->
+            PreviewMultiplePermissionsState(permissions, previewPermissionStatuses)
+        else -> rememberMutableMultiplePermissionsState(permissions, onPermissionsResult)
+    }
 }
 
 /**
@@ -45,32 +77,27 @@ fun rememberMultiplePermissionsState(
  */
 @ExperimentalPermissionsApi
 @Stable
-interface MultiplePermissionsState {
+public interface MultiplePermissionsState {
 
     /**
      * List of all permissions to request.
      */
-    val permissions: List<PermissionState>
+    public val permissions: List<PermissionState>
 
     /**
      * List of permissions revoked by the user.
      */
-    val revokedPermissions: List<PermissionState>
+    public val revokedPermissions: List<PermissionState>
 
     /**
      * When `true`, the user has granted all [permissions].
      */
-    val allPermissionsGranted: Boolean
+    public val allPermissionsGranted: Boolean
 
     /**
      * When `true`, the user should be presented with a rationale.
      */
-    val shouldShowRationale: Boolean
-
-    /**
-     * When `true`, the [permissions] request has been done previously.
-     */
-    val permissionRequested: Boolean
+    public val shouldShowRationale: Boolean
 
     /**
      * Request the [permissions] to the user.
@@ -83,5 +110,25 @@ interface MultiplePermissionsState {
      * again or has denied the permission multiple times.
      * This behavior varies depending on the Android level API.
      */
-    fun launchMultiplePermissionRequest(): Unit
+    public fun launchMultiplePermissionRequest(): Unit
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Immutable
+private class PreviewMultiplePermissionsState(
+    permissions: List<String>,
+    permissionStatuses: Map<String, PermissionStatus>
+) : MultiplePermissionsState {
+    override val permissions: List<PermissionState> = permissions.fastMap { permission ->
+        PreviewPermissionState(
+            permission = permission,
+            status = permissionStatuses[permission] ?: PermissionStatus.Granted,
+        )
+    }
+
+    override val revokedPermissions: List<PermissionState> = emptyList()
+    override val allPermissionsGranted: Boolean = false
+    override val shouldShowRationale: Boolean = false
+
+    override fun launchMultiplePermissionRequest() {}
 }

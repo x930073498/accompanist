@@ -2,6 +2,15 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/com.google.accompanist/accompanist-systemuicontroller)](https://search.maven.org/search?q=g:com.google.accompanist)
 
+!!! warning
+    **This library is deprecated, and the API is no longer maintained. We recommend forking the implementation and customising it to your needs.** The original documentation is below.
+
+## Migration
+Recommendation: If you were using SystemUIController to go edge-to-edge in your activity and change the system bar colors and system bar icon colors, use the new [Activity.enableEdgeToEdge](https://developer.android.com/reference/androidx/activity/ComponentActivity#(androidx.activity.ComponentActivity).enableEdgeToEdge(androidx.activity.SystemBarStyle,androidx.activity.SystemBarStyle)) method available in androidx.activity 1.8.0-alpha03 and later. This method backports the scrims used on some versions of Android. [This](https://github.com/android/nowinandroid/pull/817) is a sample PR of the migration to the new method and removing the dependency on SystemUIController in Now in Android.
+
+For other usages, migrate to using WindowInsetsControllerCompat or window APIs directly.
+
+## Original Documentation
 System UI Controller provides easy-to-use utilities for updating the System UI bar colors within Jetpack Compose.
 
 ## Usage
@@ -12,9 +21,9 @@ In your layouts you can update the system bar colors like so:
 ``` kotlin
 // Remember a SystemUiController
 val systemUiController = rememberSystemUiController()
-val useDarkIcons = MaterialTheme.colors.isLight
+val useDarkIcons = !isSystemInDarkTheme()
 
-SideEffect {
+DisposableEffect(systemUiController, useDarkIcons) {
     // Update all of the system bar colors to be transparent, and use
     // dark icons if we're in light theme
     systemUiController.setSystemBarsColor(
@@ -22,7 +31,9 @@ SideEffect {
         darkIcons = useDarkIcons
     )
 
-    // setStatusBarsColor() and setNavigationBarColor() also exist
+    // setStatusBarColor() and setNavigationBarColor() also exist
+
+    onDispose {}
 }
 ```
 
@@ -40,7 +51,7 @@ Similar happens on navigation bar color, which is only available on API 26+.
 The scrim logic can be modified if needed:
 
 ``` kotlin
-systemUiController.setStatusBarsColor(
+systemUiController.setStatusBarColor(
     color = Color.Transparent,
     darkIcons = true
 ) { requestedColor ->

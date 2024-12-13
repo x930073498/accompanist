@@ -17,7 +17,6 @@
 package com.google.accompanist.drawablepainter
 
 import android.graphics.drawable.Animatable
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
@@ -34,11 +33,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asAndroidColorFilter
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.withSave
@@ -55,16 +52,19 @@ private val MAIN_HANDLER by lazy(LazyThreadSafetyMode.NONE) {
  *
  * Instances are usually retrieved from [rememberDrawablePainter].
  */
-class DrawablePainter(
-    val drawable: Drawable
+public class DrawablePainter(
+    public val drawable: Drawable
 ) : Painter(), RememberObserver {
-    private var invalidateTick by mutableStateOf(0)
+    private var drawInvalidateTick by mutableStateOf(0)
+    private var drawableIntrinsicSize by mutableStateOf(drawable.intrinsicSize)
 
     private val callback: Drawable.Callback by lazy {
         object : Drawable.Callback {
             override fun invalidateDrawable(d: Drawable) {
                 // Update the tick so that we get re-drawn
-                invalidateTick++
+                drawInvalidateTick++
+                // Update our intrinsic size too
+                drawableIntrinsicSize = drawable.intrinsicSize
             }
 
             override fun scheduleDrawable(d: Drawable, what: Runnable, time: Long) {
@@ -90,7 +90,7 @@ class DrawablePainter(
         if (drawable is Animatable) drawable.start()
     }
 
-    override fun onAbandoned() = onForgotten()
+    override fun onAbandoned(): Unit = onForgotten()
 
     override fun onForgotten() {
         if (drawable is Animatable) drawable.stop()
@@ -120,22 +120,12 @@ class DrawablePainter(
         return false
     }
 
-    override val intrinsicSize: Size
-        get() = when {
-            // Only return a finite size if the drawable has an intrinsic size
-            drawable.intrinsicWidth >= 0 && drawable.intrinsicHeight >= 0 -> {
-                Size(
-                    width = drawable.intrinsicWidth.toFloat(),
-                    height = drawable.intrinsicHeight.toFloat(),
-                )
-            }
-            else -> Size.Unspecified
-        }
+    override val intrinsicSize: Size get() = drawableIntrinsicSize
 
     override fun DrawScope.onDraw() {
         drawIntoCanvas { canvas ->
             // Reading this ensures that we invalidate when invalidateDrawable() is called
-            invalidateTick
+            drawInvalidateTick
 
             // Update the Drawable's bounds
             drawable.setBounds(0, 0, size.width.roundToInt(), size.height.roundToInt())
@@ -159,16 +149,24 @@ class DrawablePainter(
  * @sample com.google.accompanist.sample.drawablepainter.BasicSample
  */
 @Composable
-fun rememberDrawablePainter(drawable: Drawable?): Painter = remember(drawable) {
+public fun rememberDrawablePainter(drawable: Drawable?): Painter = remember(drawable) {
     when (drawable) {
         null -> EmptyPainter
-        is BitmapDrawable -> BitmapPainter(drawable.bitmap.asImageBitmap())
         is ColorDrawable -> ColorPainter(Color(drawable.color))
         // Since the DrawablePainter will be remembered and it implements RememberObserver, it
         // will receive the necessary events
         else -> DrawablePainter(drawable.mutate())
     }
 }
+
+private val Drawable.intrinsicSize: Size
+    get() = when {
+        // Only return a finite size if the drawable has an intrinsic size
+        intrinsicWidth >= 0 && intrinsicHeight >= 0 -> {
+            Size(width = intrinsicWidth.toFloat(), height = intrinsicHeight.toFloat())
+        }
+        else -> Size.Unspecified
+    }
 
 internal object EmptyPainter : Painter() {
     override val intrinsicSize: Size get() = Size.Unspecified

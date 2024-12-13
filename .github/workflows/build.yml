@@ -4,8 +4,13 @@ on:
   push:
     branches:
       - main
-      - snapshot
       - compose-1.0
+      - compose-1.1
+      - compose-1.2
+      - compose-1.3
+      - compose-1.4
+      - compose-1.5
+      - compose-1.6
     paths-ignore:
       - '**.md'
   pull_request:
@@ -16,7 +21,7 @@ jobs:
     if: "!contains(github.event.head_commit.message, 'skip ci')"
 
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v2
@@ -27,31 +32,24 @@ jobs:
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
-      - name: set up JDK
-        uses: actions/setup-java@v1
+      - name: Setup java
+        uses: actions/setup-java@v3
         with:
-          java-version: 11
+          distribution: temurin
+          java-version: 17
 
       - name: Decrypt secrets
         run: release/signing-setup.sh ${{ secrets.ENCRYPT_KEY }}
 
-      - name: Generate cache key
-        run: ./checksum.sh checksum.txt
-
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.gradle/caches/modules-*
-            ~/.gradle/caches/jars-*
-            ~/.gradle/caches/build-cache-*
-          key: gradle-${{ hashFiles('checksum.txt') }}
-
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
+        
       - name: Build
         run: |
           ./gradlew --scan --stacktrace \
               spotlessCheck \
               assemble \
-              metalavaCheckCompatibility \
+              metalavaCheckCompatibilityRelease \
               lintDebug
 
       - name: Unit Tests
@@ -63,7 +61,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-robolectric
           path: |
@@ -75,22 +73,22 @@ jobs:
         run: release/signing-cleanup.sh
 
   test:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     needs: build
-    timeout-minutes: 50
+    timeout-minutes: 70
 
     strategy:
       # Allow tests to continue on other devices if they fail on one device.
       fail-fast: false
       matrix:
-        api-level: [ 22, 26, 28, 29 ]
+        api-level: [ 22, 26, 30 ]
         shard: [ 0, 1 ] # Need to update shard-count below if this changes
 
     env:
       TERM: dumb
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           # Fetch expanded history, which is needed for affected module detection
           fetch-depth: '500'
@@ -98,26 +96,25 @@ jobs:
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
-      - name: set up JDK
-        uses: actions/setup-java@v1
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Setup java
+        uses: actions/setup-java@v3
         with:
-          java-version: 11
+          distribution: temurin
+          java-version: 17
 
       - name: Decrypt secrets
         run: release/signing-setup.sh ${{ secrets.ENCRYPT_KEY }}
 
-      - name: Generate cache key
-        run: ./checksum.sh checksum.txt
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
 
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.gradle/caches/modules-*
-            ~/.gradle/caches/jars-*
-            ~/.gradle/caches/build-cache-*
-          key: gradle-${{ hashFiles('checksum.txt') }}
-
-      # Determine what emulator image to use. We run all API 29+ emulators using
+      # Determine what emulator image to use. We run all API 28+ emulators using
       # the google_apis image
       - name: Determine emulator target
         id: determine-target
@@ -125,19 +122,27 @@ jobs:
           API_LEVEL: ${{ matrix.api-level }}
         run: |
           TARGET="default"
-          if [ "$API_LEVEL" -ge "29" ]; then
+          if [ "$API_LEVEL" -ge "28" ]; then
             TARGET="google_apis"
           fi
-          echo "::set-output name=TARGET::$TARGET"
-
+          echo "TARGET=$TARGET" >> $GITHUB_OUTPUT
+      - name: Determine emulator arch
+        id: determine-arch
+        env: 
+          API_LEVEL: ${{ matrix.api-level }}
+        run: |
+          ARCH="x86"
+          if [ "$API_LEVEL" -ge "29" ]; then
+            ARCH="x86_64"
+          fi
+          echo "ARCH=$ARCH" >> $GITHUB_OUTPUT
       - name: Run tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
+          arch: ${{ steps.determine-arch.outputs.ARCH }}
           target: ${{ steps.determine-target.outputs.TARGET }}
           profile: Galaxy Nexus
-          emulator-build: 7425822 # https://github.com/ReactiveCircus/android-emulator-runner/issues/160
-          # We run all affected tests of the PR (or commit)
           script: ./scripts/run-tests.sh --log-file=logcat.txt --run-affected --affected-base-ref=$BASE_REF --shard-index=${{ matrix.shard }} --shard-count=2
 
       - name: Clean secrets
@@ -146,14 +151,14 @@ jobs:
 
       - name: Upload logs
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: logs-${{ matrix.api-level }}-${{ steps.determine-target.outputs.TARGET }}-${{ matrix.shard }}
           path: logcat.txt
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.api-level }}-${{ steps.determine-target.outputs.TARGET }}-${{ matrix.shard }}
           path: |
@@ -175,27 +180,20 @@ jobs:
       - name: Copy CI gradle.properties
         run: mkdir -p ~/.gradle ; cp .github/ci-gradle.properties ~/.gradle/gradle.properties
 
-      - name: set up JDK
-        uses: actions/setup-java@v1
+      - name: Setup java
+        uses: actions/setup-java@v3
         with:
-          java-version: 11
+          distribution: temurin
+          java-version: 17
 
       - name: Decrypt secrets
         run: release/signing-setup.sh ${{ secrets.ENCRYPT_KEY }}
 
-      - name: Generate cache key
-        run: ./checksum.sh checksum.txt
-
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/.gradle/caches/modules-*
-            ~/.gradle/caches/jars-*
-            ~/.gradle/caches/build-cache-*
-          key: gradle-${{ hashFiles('checksum.txt') }}
+      - name: Setup Gradle
+        uses: gradle/gradle-build-action@v2
 
       - name: Deploy to Sonatype
-        run: ./gradlew publish --no-parallel --stacktrace
+        run: ./gradlew publish --no-parallel --stacktrace --no-configuration-cache
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.SONATYPE_NEXUS_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.SONATYPE_NEXUS_PASSWORD }}
